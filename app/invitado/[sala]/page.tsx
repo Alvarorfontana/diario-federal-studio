@@ -60,10 +60,22 @@ export default function Invitado() {
     procFondo.current?.detener();
     procFondo.current = null;
     try {
-      const cam0 = await navigator.mediaDevices.getUserMedia({
-        video: { ...VIDEO_HD, ...(c ? { deviceId: { exact: c } } : { facingMode: "user" }) },
-        audio: { ...AUDIO_VOZ, ...(m ? { deviceId: { exact: m } } : {}) },
-      });
+      // Navegadores internos (WhatsApp, Instagram, Facebook) y equipos viejos no dan acceso a la cámara.
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setNota("Este navegador no permite usar la cámara. Abrí este enlace en Chrome o Safari: tocá el menú de esta pantalla y elegí abrir en el navegador.");
+        return;
+      }
+      let cam0: MediaStream;
+      try {
+        cam0 = await navigator.mediaDevices.getUserMedia({
+          video: { ...VIDEO_HD, ...(c ? { deviceId: { exact: c } } : { facingMode: "user" }) },
+          audio: { ...AUDIO_VOZ, ...(m ? { deviceId: { exact: m } } : {}) },
+        });
+      } catch (e) {
+        if ((e as DOMException)?.name === "NotAllowedError") throw e;
+        // algunos equipos rechazan la calidad pedida: se prueba con lo básico
+        cam0 = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      }
       crudo.current = cam0;
       let s = cam0;
       if (tipoFondo !== "ninguno" && tipoFondo !== "foto") {

@@ -478,6 +478,7 @@ export default function Consola() {
   // ——— pantalla compartida
   async function compartir() {
     if (pantalla.current) return dejarDeCompartir();
+    if (!navigator.mediaDevices?.getDisplayMedia) { avisar("Este equipo no permite compartir pantalla. Hacelo desde una computadora."); return; }
     try {
       const s = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: true });
       pantalla.current = { stream: s, video: crearVideo(s) };
