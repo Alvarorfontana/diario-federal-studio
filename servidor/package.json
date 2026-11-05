@@ -1,8 +1,0 @@
-{
-  "name": "df-studio-puente",
-  "version": "1.0.0",
-  "private": true,
-  "description": "Puente de Diario Federal Studio: recibe el programa desde el navegador y lo emite en YouTube",
-  "main": "servidor.js",
-  "dependencies": { "ws": "^8.18.0" }
-}

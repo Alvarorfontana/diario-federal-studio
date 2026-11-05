@@ -3,8 +3,8 @@ title: DF Studio Puente
 emoji: 🔴
 colorFrom: red
 colorTo: gray
-sdk: docker
-app_port: 7860
+sdk: gradio
+app_file: app.py
 pinned: false
 ---
 
