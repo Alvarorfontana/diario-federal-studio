@@ -8,7 +8,14 @@ REPO="${GITHUB_REPOSITORY:-Alvarorfontana/diario-federal-studio}"
 
 pkill -f "python app.py" 2>/dev/null || true
 pkill -f "cloudflared tunnel" 2>/dev/null || true
+
+# lo que necesita el puente (por si no quedó instalado al crear el codespace)
+python -c "import fastapi, uvicorn" 2>/dev/null || { echo "Instalando FastAPI…"; pip install -q -r requirements.txt; }
+command -v ffmpeg >/dev/null || { echo "Instalando ffmpeg…"; sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null; }
+
 PORT=8000 setsid nohup python app.py > /tmp/puente.log 2>&1 < /dev/null &
+for i in $(seq 1 15); do sleep 1; curl -sf localhost:8000/ >/dev/null && break; done
+if curl -sf localhost:8000/ >/dev/null; then echo "Servidor del puente: funcionando"; else echo "El servidor no arrancó. Detalle:"; tail -20 /tmp/puente.log; exit 1; fi
 
 if ! command -v cloudflared >/dev/null 2>&1 && [ ! -x /tmp/cloudflared ]; then
   echo "Bajando cloudflared…"
