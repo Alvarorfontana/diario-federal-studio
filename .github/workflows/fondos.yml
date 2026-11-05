@@ -5,6 +5,9 @@ on:
       semilla:
         description: "Semilla (cambiala para obtener otras versiones)"
         default: "1907"
+      rehacer:
+        description: "Rehacer también los que ya existen (si/no)"
+        default: "no"
 permissions:
   contents: write
 jobs:
@@ -18,6 +21,7 @@ jobs:
           sudo apt-get install -y -qq webp >/dev/null 2>&1 || true
           while IFS='|' read -r id prompt; do
             [ -z "$id" ] && continue
+            if [ -f "public/fondos/$id.jpg" ] && [ "${{ inputs.rehacer }}" != "si" ]; then echo "ya existe $id"; continue; fi
             q=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))" "$prompt")
             for intento in 1 2 3; do
               if curl -sfL --max-time 180 -o "public/fondos/$id.jpg" "https://image.pollinations.ai/prompt/$q?width=1920&height=1080&seed=${{ inputs.semilla }}&nologo=true&model=flux&referrer=diariofederal"; then
@@ -28,6 +32,21 @@ jobs:
             ls -la "public/fondos/$id.jpg"
             sleep 16
           done < public/fondos/prompts.txt
+      - name: Recortar la marca de agua y llevar a 1920x1080
+        run: |
+          python3 -m pip install -q pillow
+          python3 - <<'PY'
+          from PIL import Image, ImageFilter
+          import glob
+          for f in glob.glob('public/fondos/n-*.jpg'):
+              im = Image.open(f).convert('RGB')
+              w, h = im.size
+              if (w, h) == (1920, 1080):
+                  continue
+              ch = int(h * 0.93); cw = int(ch * 16 / 9); x0 = (w - cw) // 2
+              im = im.crop((x0, 0, x0 + cw, ch)).resize((1920, 1080), Image.LANCZOS).filter(ImageFilter.UnsharpMask(radius=2, percent=60))
+              im.save(f, quality=88, optimize=True)
+          PY
       - name: Guardar en el repo
         run: |
           git config user.name "Alvarorfontana"
