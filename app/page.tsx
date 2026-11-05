@@ -12,8 +12,17 @@ import { Mezcla } from "@/lib/mezcla";
 import { FONDOS, NOTICIEROS, ProcesadorFondo, leerFoto, urlFondo, fijarBorde, bordeActual, fijarRecorte, recorteActual, type TipoFondo } from "@/lib/fondos";
 import { crearPeer, idEstudio, nuevaSala, hora, iniciales, subirCalidad, VIDEO_HD, AUDIO_VOZ, type Mensaje } from "@/lib/red";
 
-// Puente a YouTube del Diario Federal (GitHub Codespaces). Se puede cambiar desde Salidas.
-const PUENTE_DF = "https://curly-eureka-4gvvv7wpxrhjqq5-8000.app.github.dev";
+// Puente a YouTube del Diario Federal: corre en GitHub Codespaces y publica su dirección
+// (un túnel de Cloudflare que cambia cada vez que se enciende) en la rama "puente" del repo.
+const PUENTE_DF = "";
+async function buscarPuente(): Promise<string> {
+  try {
+    const r = await fetch("https://api.github.com/repos/Alvarorfontana/diario-federal-studio/contents/puente.json?ref=puente", { cache: "no-store", headers: { Accept: "application/vnd.github.raw+json" } });
+    if (!r.ok) return "";
+    const j = await r.json();
+    return typeof j.url === "string" ? j.url : "";
+  } catch { return ""; }
+}
 
 type Parte = {
   id: string;
@@ -165,6 +174,7 @@ export default function Consola() {
     setTema(leer("tema", ""));
     setCamara(leer("camara", ""));
     setPuenteUrl(leer("puente-url", process.env.NEXT_PUBLIC_PUENTE_URL || PUENTE_DF));
+    buscarPuente().then((u) => { if (u) setPuenteUrl(u); });
     setPuenteClave(leer("puente-clave", ""));
     setMicro(leer("micro", ""));
   }, []);
@@ -579,7 +589,9 @@ export default function Consola() {
     }
     const s = (window as unknown as { dfPrograma?: MediaStream }).dfPrograma;
     if (!s) return;
-    const base = puenteUrl.trim().replace(/\/+$/, "");
+    const publicada = await buscarPuente();
+    if (publicada) setPuenteUrl(publicada);
+    const base = (publicada || puenteUrl).trim().replace(/\/+$/, "");
     guardar("puente-url", base);
     guardar("puente-clave", puenteClave);
     // el servidor gratuito se duerme si no se usa: primero se lo despierta
@@ -637,7 +649,7 @@ export default function Consola() {
   }
 
   async function emitir() {
-    if (puenteUrl.trim()) return emitirPuente();
+    if (puenteUrl.trim() || (await buscarPuente())) return emitirPuente();
     const o = obs.current;
     if (!o) { setPanel("salidas"); avisar("Primero conectá OBS en Salidas"); return; }
     if (obsEstado === "emitiendo") {
