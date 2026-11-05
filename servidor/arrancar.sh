@@ -11,7 +11,13 @@ pkill -f "cloudflared tunnel" 2>/dev/null || true
 
 # lo que necesita el puente (por si no quedó instalado al crear el codespace)
 python -c "import fastapi, uvicorn" 2>/dev/null || { echo "Instalando FastAPI…"; pip install -q -r requirements.txt; }
-command -v ffmpeg >/dev/null || { echo "Instalando ffmpeg…"; sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null; }
+if ! command -v ffmpeg >/dev/null; then
+  echo "Instalando ffmpeg (un minuto)…"
+  sudo rm -f /etc/apt/sources.list.d/yarn.list   # repositorio roto que trae la imagen y frena apt
+  sudo apt-get update -qq >/dev/null 2>&1 || true
+  sudo apt-get install -y -qq ffmpeg >/dev/null 2>&1 || true
+fi
+command -v ffmpeg >/dev/null && echo "ffmpeg: instalado" || echo "ATENCIÓN: no se pudo instalar ffmpeg"
 
 PORT=8000 setsid nohup python app.py > /tmp/puente.log 2>&1 < /dev/null &
 for i in $(seq 1 15); do sleep 1; curl -sf localhost:8000/ >/dev/null && break; done
