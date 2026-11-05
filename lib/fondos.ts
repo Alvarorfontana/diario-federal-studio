@@ -69,6 +69,15 @@ function cargarLibreria() {
   return libreria;
 }
 
+// Cuánto se "come" el borde del recorte (más alto = menos halo, pero recorta un poco más el pelo)
+let ajusteBorde = 2;
+try { ajusteBorde = Number(localStorage.getItem("df-borde") || 2); } catch {}
+export function fijarBorde(n: number) {
+  ajusteBorde = n;
+  try { localStorage.setItem("df-borde", String(n)); } catch {}
+}
+export function bordeActual() { return ajusteBorde; }
+
 export class ProcesadorFondo {
   salida: MediaStream;
   private video: HTMLVideoElement;
@@ -150,8 +159,7 @@ export class ProcesadorFondo {
     // se ajusta el borde hacia adentro (la máscara se multiplica por sí misma): así no queda
     // el halo claro que deja la pared de atrás alrededor de la cabeza y los hombros
     p.globalCompositeOperation = "destination-in";
-    p.drawImage(this.persona, 0, 0);
-    p.drawImage(this.persona, 0, 0);
+    for (let i = 0; i < ajusteBorde; i++) p.drawImage(this.persona, 0, 0);
     p.globalCompositeOperation = "source-in";
     p.drawImage(r.image, 0, 0, w, h);
     p.restore();

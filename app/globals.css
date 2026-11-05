@@ -318,3 +318,4 @@ footer{background:#0e1115;border-color:#252b33;padding-inline:30px}
 .fondo-tile:disabled{opacity:.5;cursor:wait}
 .modal-pie{padding:14px 22px;border-top:1px solid var(--line);display:flex;justify-content:flex-end}
 @media(max-width:700px){.dos-col,.fondos-grilla{grid-template-columns:1fr 1fr}}
+.vol.ancho{width:100%}
