@@ -1,0 +1,19 @@
+name: Bajar modelos de recorte
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  modelos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          mkdir -p public/modelos
+          curl -sfL -o public/modelos/selfie_multiclass_256x256.tflite https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite
+          curl -sfL -o public/modelos/selfie_segmenter_landscape.tflite https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter_landscape/float16/latest/selfie_segmenter_landscape.tflite
+          ls -la public/modelos
+          git config user.name "Alvarorfontana"
+          git config user.email "alvarorfontana@gmail.com"
+          git add public/modelos
+          git commit -m "Modelos de recorte de MediaPipe (Apache 2.0)" || echo sin cambios
+          git push
