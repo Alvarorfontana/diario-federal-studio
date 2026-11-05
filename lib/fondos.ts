@@ -2,19 +2,55 @@
 // y le pone detrás un fondo de estudio con la gráfica de Diario Federal.
 // Los archivos del modelo están en /public/mediapipe: no depende de ningún servicio externo.
 
-export type TipoFondo = "ninguno" | "estudio" | "redaccion" | "marca" | "desenfoque" | "foto";
+export type TipoFondo = string; // "ninguno" | "desenfoque" | "foto" | id de un fondo de noticiero
+
+// Fondos de canal de noticias, generados con IA gratis (Pollinations, modelo FLUX) la primera vez que se usan.
+// Cada fondo tiene una "semilla" fija: en cualquier computadora sale la misma imagen. "Otra versión" cambia la semilla.
+export type FondoNoticias = { id: string; nombre: string; prompt: string };
+const ESTILO = "photorealistic, professional broadcast television set, empty, no people, no text, no letters, no logos, cinematic lighting, shallow depth of field, 16:9";
+export const NOTICIEROS: FondoNoticias[] = [
+  { id: "n-pantallas", nombre: "Estudio con pantalla gigante", prompt: `Modern TV news studio, huge curved LED video wall showing a city skyline at night, dark blue and red lighting, glossy floor, ${ESTILO}` },
+  { id: "n-ciudad", nombre: "Ventanal sobre la ciudad", prompt: `Evening news studio with floor-to-ceiling windows overlooking Buenos Aires city lights at night, blurred bokeh, red accent lights, modern anchor set, ${ESTILO}` },
+  { id: "n-redaccion", nombre: "Redacción", prompt: `Busy modern newsroom background out of focus, rows of desks with computer monitors, wall of TV screens, red accents, bright, ${ESTILO}` },
+  { id: "n-mundo", nombre: "Mapa del mundo", prompt: `International news channel studio, large digital world map on LED screens, deep blue and red neon accents, ${ESTILO}` },
+  { id: "n-analisis", nombre: "Set de análisis político", prompt: `Political analysis TV studio, dark modern set with vertical LED panels, subtle light blue and white accents, elegant, ${ESTILO}` },
+  { id: "n-entrevista", nombre: "Set de entrevistas", prompt: `TV interview studio set background, warm lights, wooden bookshelves, red accent wall, plants, ${ESTILO}` },
+];
 
 export const FONDOS: { id: TipoFondo; nombre: string }[] = [
   { id: "ninguno", nombre: "Sin fondo (cámara real)" },
-  { id: "estudio", nombre: "Estudio DF · noche" },
-  { id: "redaccion", nombre: "Redacción DF" },
-  { id: "marca", nombre: "Pared DF" },
+  ...NOTICIEROS.map((n) => ({ id: n.id, nombre: n.nombre })),
   { id: "desenfoque", nombre: "Desenfocar mi fondo" },
   { id: "foto", nombre: "Foto propia" },
 ];
 
-const ROJO = "#d0021b";
-const FUENTE = "Manrope, Inter, Arial, Helvetica, sans-serif";
+function semilla(id: string) {
+  try { return Number(localStorage.getItem("df-semilla-" + id) || "") || 1907; } catch { return 1907; }
+}
+export function otraVersion(id: string) {
+  const s = Math.floor(Math.random() * 1e6);
+  try { localStorage.setItem("df-semilla-" + id, String(s)); } catch {}
+  return s;
+}
+export function urlFondo(id: string, ancho = 1920, alto = 1080) {
+  const n = NOTICIEROS.find((x) => x.id === id);
+  if (!n) return "";
+  return `https://image.pollinations.ai/prompt/${encodeURIComponent(n.prompt)}?width=${ancho}&height=${alto}&seed=${semilla(id)}&nologo=true&model=flux`;
+}
+
+const cache = new Map<string, Promise<HTMLImageElement>>();
+export function cargarImagen(url: string): Promise<HTMLImageElement> {
+  if (!cache.has(url)) {
+    cache.set(url, new Promise((ok, mal) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => ok(img);
+      img.onerror = () => { cache.delete(url); mal(new Error("no cargó la imagen")); };
+      img.src = url;
+    }));
+  }
+  return cache.get(url)!;
+}
 
 type Resultado = { segmentationMask: CanvasImageSource; image: CanvasImageSource };
 type Segmentador = {
@@ -43,151 +79,6 @@ function cargarLibreria() {
   return libreria;
 }
 
-// azar con semilla, para que el fondo sea siempre el mismo
-function azar(semilla: number) {
-  let x = semilla;
-  return () => ((x = (x * 16807) % 2147483647) - 1) / 2147483646;
-}
-
-function logoDF(ctx: CanvasRenderingContext2D, x: number, y: number, t: number, alfa = 1) {
-  ctx.save();
-  ctx.globalAlpha = alfa;
-  ctx.fillStyle = ROJO;
-  ctx.fillRect(x, y, t, t);
-  ctx.fillStyle = "#fff";
-  ctx.font = `800 ${Math.round(t * 0.5)}px ${FUENTE}`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText("DF", x + t / 2, y + t / 2 + t * 0.03);
-  ctx.restore();
-}
-
-export function dibujarFondo(tipo: TipoFondo, w = 1280, h = 720): HTMLCanvasElement {
-  const c = document.createElement("canvas");
-  c.width = w;
-  c.height = h;
-  const ctx = c.getContext("2d")!;
-  const r = azar(tipo === "estudio" ? 7 : tipo === "redaccion" ? 13 : 21);
-
-  if (tipo === "estudio") {
-    // estudio de noche: ventanal con ciudad desenfocada, luces cálidas, pared con la marca
-    const g = ctx.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0, "#0a1220");
-    g.addColorStop(0.6, "#142033");
-    g.addColorStop(1, "#0b0f16");
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, w, h);
-    ctx.save();
-    ctx.filter = "blur(6px)";
-    for (let i = 0; i < 26; i++) {
-      const bw = 30 + r() * 70, bh = 120 + r() * 300, bx = r() * w, by = h * 0.72 - bh;
-      ctx.fillStyle = `rgba(${20 + r() * 20},${32 + r() * 25},${55 + r() * 30},1)`;
-      ctx.fillRect(bx, by, bw, bh);
-      for (let k = 0; k < bh / 14; k++) {
-        if (r() < 0.45) {
-          ctx.fillStyle = r() < 0.8 ? "rgba(255,200,120,.55)" : "rgba(160,200,255,.5)";
-          ctx.fillRect(bx + 4 + r() * (bw - 10), by + k * 14 + 4, 5, 5);
-        }
-      }
-    }
-    for (let i = 0; i < 40; i++) {
-      ctx.beginPath();
-      ctx.fillStyle = r() < 0.3 ? "rgba(208,2,27,.35)" : `rgba(255,${170 + r() * 60},${90 + r() * 60},.25)`;
-      ctx.arc(r() * w, h * 0.2 + r() * h * 0.55, 6 + r() * 26, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.restore();
-    // marcos del ventanal
-    ctx.fillStyle = "rgba(5,8,12,.75)";
-    for (let x = 0; x < w; x += w / 5) ctx.fillRect(x, 0, 10, h);
-    ctx.fillRect(0, h * 0.72, w, h * 0.28);
-    // pared lateral con la marca
-    const pared = ctx.createLinearGradient(w * 0.74, 0, w, 0);
-    pared.addColorStop(0, "rgba(16,18,24,.92)");
-    pared.addColorStop(1, "rgba(28,31,38,.98)");
-    ctx.fillStyle = pared;
-    ctx.fillRect(w * 0.74, 0, w * 0.26, h);
-    ctx.fillStyle = ROJO;
-    ctx.fillRect(w * 0.74, 0, 8, h);
-    logoDF(ctx, w * 0.81, h * 0.16, w * 0.11, 0.95);
-    ctx.fillStyle = "rgba(255,255,255,.75)";
-    ctx.font = `800 ${Math.round(w * 0.022)}px ${FUENTE}`;
-    ctx.fillText("DIARIO", w * 0.795, h * 0.43);
-    ctx.fillText("FEDERAL", w * 0.795, h * 0.48);
-    // mesa / zócalo de luz
-    const piso = ctx.createLinearGradient(0, h * 0.82, 0, h);
-    piso.addColorStop(0, "rgba(208,2,27,.0)");
-    piso.addColorStop(0.08, "rgba(208,2,27,.55)");
-    piso.addColorStop(0.12, "rgba(30,10,14,.9)");
-    piso.addColorStop(1, "#07080b");
-    ctx.fillStyle = piso;
-    ctx.fillRect(0, h * 0.82, w, h * 0.18);
-  } else if (tipo === "redaccion") {
-    // redacción: pantallas y escritorios desenfocados, tono claro
-    const g = ctx.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0, "#2a313b");
-    g.addColorStop(1, "#151a21");
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, w, h);
-    ctx.save();
-    ctx.filter = "blur(5px)";
-    // luces de techo
-    for (let x = 60; x < w; x += 220) {
-      ctx.fillStyle = "rgba(235,240,255,.55)";
-      ctx.fillRect(x, 30, 140, 10);
-    }
-    // pared de pantallas
-    for (let fila = 0; fila < 3; fila++) {
-      for (let col = 0; col < 7; col++) {
-        const x = 40 + col * (w / 7.3), y = 110 + fila * 120;
-        ctx.fillStyle = "#0b0e13";
-        ctx.fillRect(x - 4, y - 4, w / 8 + 8, 98);
-        const p = ctx.createLinearGradient(x, y, x + w / 8, y + 90);
-        const tono = r();
-        p.addColorStop(0, tono < 0.25 ? "#b01225" : tono < 0.6 ? "#2c4f7c" : "#3d5566");
-        p.addColorStop(1, tono < 0.25 ? "#5d0912" : "#16273d");
-        ctx.fillStyle = p;
-        ctx.fillRect(x, y, w / 8, 90);
-        ctx.fillStyle = "rgba(255,255,255,.35)";
-        ctx.fillRect(x + 10, y + 60, (w / 8) * (0.4 + r() * 0.4), 6);
-      }
-    }
-    // escritorios y monitores
-    for (let i = 0; i < 9; i++) {
-      const x = r() * w, y = h * 0.68 + r() * 40;
-      ctx.fillStyle = "rgba(120,170,230,.35)";
-      ctx.fillRect(x, y, 70, 44);
-    }
-    ctx.restore();
-    ctx.fillStyle = "rgba(10,12,16,.55)";
-    ctx.fillRect(0, h * 0.78, w, h * 0.22);
-    // columna roja con la marca
-    ctx.fillStyle = ROJO;
-    ctx.fillRect(w * 0.015, 0, w * 0.018, h);
-    logoDF(ctx, w * 0.865, h * 0.07, w * 0.075, 0.9);
-  } else if (tipo === "marca") {
-    // pared institucional: gris oscuro, diagonales y marca grande
-    const g = ctx.createLinearGradient(0, 0, w, h);
-    g.addColorStop(0, "#14171d");
-    g.addColorStop(1, "#262b33");
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, w, h);
-    ctx.save();
-    ctx.globalAlpha = 0.07;
-    ctx.strokeStyle = "#fff";
-    ctx.lineWidth = 2;
-    for (let i = -h; i < w + h; i += 60) { ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i - h, h); ctx.stroke(); }
-    ctx.restore();
-    ctx.fillStyle = ROJO;
-    ctx.fillRect(0, h * 0.86, w, 10);
-    logoDF(ctx, w * 0.06, h * 0.08, w * 0.09, 0.95);
-    ctx.fillStyle = "rgba(255,255,255,.08)";
-    ctx.font = `800 ${Math.round(w * 0.16)}px ${FUENTE}`;
-    ctx.fillText("DF", w * 0.62, h * 0.75);
-  }
-  return c;
-}
-
 export class ProcesadorFondo {
   salida: MediaStream;
   private video: HTMLVideoElement;
@@ -213,13 +104,16 @@ export class ProcesadorFondo {
     this.ctx = this.lienzo.getContext("2d")!;
     this.persona = document.createElement("canvas");
     this.pctx = this.persona.getContext("2d")!;
-    this.fondo = tipo === "foto" ? foto || dibujarFondo("estudio") : tipo === "desenfoque" ? null : dibujarFondo(tipo);
+    this.fondo = tipo === "desenfoque" ? null : foto || null;
     const pista = this.lienzo.captureStream(30).getVideoTracks()[0];
     this.salida = new MediaStream([pista, ...fuente.getAudioTracks()]);
   }
 
+  // tipo: "desenfoque", "foto" (con la imagen en foto) o un fondo de noticiero (se genera/carga solo)
   static async crear(fuente: MediaStream, tipo: TipoFondo, foto?: CanvasImageSource | null) {
-    const p = new ProcesadorFondo(fuente, tipo, foto);
+    let imagen = foto || null;
+    if (tipo !== "desenfoque" && tipo !== "foto") imagen = await cargarImagen(urlFondo(tipo));
+    const p = new ProcesadorFondo(fuente, tipo, imagen);
     const Clase = await cargarLibreria();
     const seg = new Clase({ locateFile: (f) => `/mediapipe/${f}` });
     seg.setOptions({ modelSelection: 1, selfieMode: false });

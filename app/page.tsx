@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { ANCHO, ALTO, dibujar, type Escena, type Persona, type Programa, type Cortina } from "@/lib/compositor";
 import { Mezcla } from "@/lib/mezcla";
-import { FONDOS, ProcesadorFondo, leerFoto, type TipoFondo } from "@/lib/fondos";
+import { FONDOS, NOTICIEROS, ProcesadorFondo, leerFoto, otraVersion, urlFondo, type TipoFondo } from "@/lib/fondos";
 import { crearPeer, idEstudio, nuevaSala, hora, iniciales, subirCalidad, VIDEO_HD, AUDIO_VOZ, type Mensaje } from "@/lib/red";
 
 type Parte = {
@@ -97,6 +97,8 @@ export default function Consola() {
   const [micro, setMicro] = useState("");
   const [monitorOn, setMonitorOn] = useState(true);
   const [fondo, setFondo] = useState<TipoFondo>("ninguno");
+  const [config, setConfig] = useState(false);
+  const [versionFondos, setVersionFondos] = useState(0);
   const [cargandoFondo, setCargandoFondo] = useState(false);
   const procFondo = useRef<ProcesadorFondo | null>(null);
   const fotoFondo = useRef<HTMLImageElement | null>(null);
@@ -693,7 +695,7 @@ export default function Consola() {
           {obsEstado === "emitiendo" && <><i /><span className="rec-chip aire"><span className="red-dot" />YOUTUBE {obsTiempo}</span></>}
           {puenteEstado === "emitiendo" && <><i /><span className="rec-chip aire"><span className="red-dot" />YOUTUBE {reloj(ahora - puenteDesde)}</span></>}
         </div>
-        <div className="top-actions"><button className="icon-btn" onClick={() => setPanel("ajustes")} aria-label="Ajustes"><Settings size={17} /></button><div className="avatar">{iniciales(nombreAnf)}</div></div>
+        <div className="top-actions"><button className="icon-btn" onClick={() => setConfig(true)} aria-label="Configuración"><Settings size={17} /></button><div className="avatar">{iniciales(nombreAnf)}</div></div>
       </header>
 
       <section className="workspace">
@@ -708,6 +710,7 @@ export default function Consola() {
           <div className="section-heading">
             <div><div className="eyebrow">PRODUCCIÓN / SALA {sala.toUpperCase()}</div><h1>Control de entrevistas</h1></div>
             <div className="heading-actions">
+              <button className="config-btn" onClick={() => setConfig(true)}><Settings size={14} /> Configuración del programa</button>
               <button className={"aire-btn " + (vivo ? "on" : "")} onClick={() => setVivo(!vivo)} title="Marca EN VIVO en pantalla y avisa a los invitados">
                 <span className="red-dot" />{vivo ? "AL AIRE" : "FUERA DEL AIRE"}
               </button>
@@ -923,6 +926,75 @@ export default function Consola() {
           <div className="panel-bottom"><span><Clapperboard size={13} /> DF STUDIO · 1.0</span><span>{conexion === "conectado" ? "EN LÍNEA" : conexion.toUpperCase()}</span></div>
         </aside>
       </section>
+      {config && (
+        <div className="modal-fondo" onClick={() => setConfig(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-cabeza">
+              <div><span className="eyebrow">DIARIO FEDERAL STUDIO</span><h2>Configuración del programa</h2></div>
+              <button className="icon-btn" onClick={() => setConfig(false)} aria-label="Cerrar"><X size={18} /></button>
+            </div>
+            <div className="modal-cuerpo">
+              <section>
+                <h3>Conductor / anfitrión</h3>
+                <div className="dos-col">
+                  <label>Nombre en el zócalo<input value={nombreAnf} onChange={(e) => { const v = e.target.value; setNombreAnf(v); guardar("nombre", v); const a = partes.current.get("anfitrion"); if (a) a.nombre = v; refrescar(); }} /></label>
+                  <label>Cargo<input value={rolAnf} onChange={(e) => { const v = e.target.value; setRolAnf(v); guardar("rol", v); const a = partes.current.get("anfitrion"); if (a) a.rol = v; refrescar(); }} /></label>
+                </div>
+                {invitados.length > 0 && <h3>Invitados</h3>}
+                {invitados.map((p) => (
+                  <div className="dos-col" key={p.id}>
+                    <label>Nombre<input value={p.nombre} onChange={(e) => cambiar(p.id, (x) => (x.nombre = e.target.value))} /></label>
+                    <label>Cargo<input value={p.rol} onChange={(e) => cambiar(p.id, (x) => (x.rol = e.target.value))} /></label>
+                  </div>
+                ))}
+              </section>
+
+              <section>
+                <h3>Fondo detrás del conductor {cargandoFondo && <small>· preparando el fondo…</small>}</h3>
+                <p className="panel-nota">Fondos de canal de noticias generados con IA gratuita. La primera vez cada uno tarda unos segundos en aparecer. {!abierto && "Abrí el estudio para aplicarlos."}</p>
+                <div className="fondos-grilla" key={versionFondos}>
+                  <button className={"fondo-tile " + (fondo === "ninguno" ? "on" : "")} onClick={() => aplicarFondo("ninguno")} disabled={!abierto || cargandoFondo}><span className="fondo-vacio">Cámara real</span><b>Sin fondo</b></button>
+                  {NOTICIEROS.map((n) => (
+                    <button key={n.id} className={"fondo-tile " + (fondo === n.id ? "on" : "")} onClick={() => aplicarFondo(n.id)} disabled={!abierto || cargandoFondo}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={urlFondo(n.id)} alt={n.nombre} loading="lazy" />
+                      <b>{n.nombre}</b>
+                    </button>
+                  ))}
+                  <button className={"fondo-tile " + (fondo === "desenfoque" ? "on" : "")} onClick={() => aplicarFondo("desenfoque")} disabled={!abierto || cargandoFondo}><span className="fondo-vacio desenf">Tu lugar, desenfocado</span><b>Desenfocar</b></button>
+                  <label className={"fondo-tile " + (fondo === "foto" ? "on" : "")}>
+                    <span className="fondo-vacio">Subir foto…</span><b>Foto propia</b>
+                    <input type="file" accept="image/*" hidden onChange={(e) => subirFoto(e.target.files?.[0])} disabled={!abierto} />
+                  </label>
+                </div>
+                {NOTICIEROS.some((n) => n.id === fondo) && (
+                  <button className="mini-btn" onClick={() => { otraVersion(fondo); setVersionFondos((v) => v + 1); aplicarFondo(fondo); }} disabled={cargandoFondo}><RefreshCw size={12} /> Otra versión de este fondo</button>
+                )}
+              </section>
+
+              <section>
+                <h3>Textos en pantalla</h3>
+                <div className="dos-col">
+                  <label>Sección (arriba y en la apertura)<input value={seccion} onChange={(e) => setSeccion(e.target.value)} /></label>
+                  <label>Tema de la entrevista (apertura)<input value={tema} onChange={(e) => { setTema(e.target.value); guardar("tema", e.target.value); }} placeholder="Ej.: La reforma laboral, punto por punto" /></label>
+                  <label>Titular<input value={titular} onChange={(e) => { setTitular(e.target.value); guardar("titular", e.target.value); }} /></label>
+                  <label>Volanta del titular<input value={volanta} onChange={(e) => setVolanta(e.target.value)} /></label>
+                  <label>Franja inferior (vacío: usa el titular)<input value={cinta} onChange={(e) => setCinta(e.target.value)} /></label>
+                  <label>Placa de pausa<input value={placaTitulo} onChange={(e) => setPlacaTitulo(e.target.value)} /></label>
+                </div>
+              </section>
+
+              <section>
+                <h3>Opciones</h3>
+                <label className="mini-check"><input type="checkbox" checked={zocalos} onChange={(e) => setZocalos(e.target.checked)} /> Mostrar zócalos con nombre y cargo</label>
+                <label className="mini-check"><input type="checkbox" checked={cortinaSonido} onChange={(e) => setCortinaSonido(e.target.checked)} /> Música en la apertura y el cierre</label>
+                <label className="mini-check"><input type="checkbox" checked={aperturaAlEmitir} onChange={(e) => setAperturaAlEmitir(e.target.checked)} /> Pasar la apertura al empezar a emitir</label>
+              </section>
+            </div>
+            <div className="modal-pie"><button className="abrir-btn" onClick={() => setConfig(false)}>Listo</button></div>
+          </div>
+        </div>
+      )}
       <footer><span>DIARIO FEDERAL STUDIO</span><span>Conexión directa entre navegadores · sin costo</span><span>Gráfica editorial DF</span></footer>
     </main>
   );

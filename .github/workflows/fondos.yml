@@ -1,0 +1,37 @@
+name: Generar fondos de noticiero
+on:
+  workflow_dispatch:
+    inputs:
+      semilla:
+        description: "Semilla (cambiala para obtener otras versiones)"
+        default: "1907"
+permissions:
+  contents: write
+jobs:
+  fondos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generar imágenes (Pollinations, gratis; una cada 16 s)
+        run: |
+          set -e
+          sudo apt-get install -y -qq webp >/dev/null 2>&1 || true
+          while IFS='|' read -r id prompt; do
+            [ -z "$id" ] && continue
+            q=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))" "$prompt")
+            for intento in 1 2 3; do
+              if curl -sfL --max-time 180 -o "public/fondos/$id.jpg" "https://image.pollinations.ai/prompt/$q?width=1920&height=1080&seed=${{ inputs.semilla }}&nologo=true&model=flux&referrer=diariofederal"; then
+                file "public/fondos/$id.jpg" | grep -q JPEG && break
+              fi
+              sleep 20
+            done
+            ls -la "public/fondos/$id.jpg"
+            sleep 16
+          done < public/fondos/prompts.txt
+      - name: Guardar en el repo
+        run: |
+          git config user.name "Alvarorfontana"
+          git config user.email "alvarorfontana@gmail.com"
+          git add public/fondos
+          git commit -m "Fondos de noticiero generados (semilla ${{ inputs.semilla }})" || echo "sin cambios"
+          git push
