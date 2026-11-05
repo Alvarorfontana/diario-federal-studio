@@ -4,8 +4,7 @@
 
 export type TipoFondo = string; // "ninguno" | "desenfoque" | "foto" | id de un fondo de noticiero
 
-// Fondos de canal de noticias, generados con IA gratis (Pollinations, modelo FLUX) la primera vez que se usan.
-// Cada fondo tiene una "semilla" fija: en cualquier computadora sale la misma imagen. "Otra versión" cambia la semilla.
+// Fondos de canal de noticias, generados con IA gratis (Pollinations, modelo FLUX) y guardados en el sitio.
 export type FondoNoticias = { id: string; nombre: string; prompt: string };
 const ESTILO = "photorealistic, professional broadcast television set, empty, no people, no text, no letters, no logos, cinematic lighting, shallow depth of field, 16:9";
 export const NOTICIEROS: FondoNoticias[] = [
@@ -24,18 +23,9 @@ export const FONDOS: { id: TipoFondo; nombre: string }[] = [
   { id: "foto", nombre: "Foto propia" },
 ];
 
-function semilla(id: string) {
-  try { return Number(localStorage.getItem("df-semilla-" + id) || "") || 1907; } catch { return 1907; }
-}
-export function otraVersion(id: string) {
-  const s = Math.floor(Math.random() * 1e6);
-  try { localStorage.setItem("df-semilla-" + id, String(s)); } catch {}
-  return s;
-}
-export function urlFondo(id: string, ancho = 1920, alto = 1080) {
-  const n = NOTICIEROS.find((x) => x.id === id);
-  if (!n) return "";
-  return `https://image.pollinations.ai/prompt/${encodeURIComponent(n.prompt)}?width=${ancho}&height=${alto}&seed=${semilla(id)}&nologo=true&model=flux`;
+// Las imágenes ya están generadas y guardadas en /public/fondos (se regeneran con el flujo "Generar fondos de noticiero").
+export function urlFondo(id: string) {
+  return NOTICIEROS.some((x) => x.id === id) ? `/fondos/${id}.jpg` : "";
 }
 
 const cache = new Map<string, Promise<HTMLImageElement>>();

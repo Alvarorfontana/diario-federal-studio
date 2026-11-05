@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { ANCHO, ALTO, dibujar, type Escena, type Persona, type Programa, type Cortina } from "@/lib/compositor";
 import { Mezcla } from "@/lib/mezcla";
-import { FONDOS, NOTICIEROS, ProcesadorFondo, leerFoto, otraVersion, urlFondo, type TipoFondo } from "@/lib/fondos";
+import { FONDOS, NOTICIEROS, ProcesadorFondo, leerFoto, urlFondo, type TipoFondo } from "@/lib/fondos";
 import { crearPeer, idEstudio, nuevaSala, hora, iniciales, subirCalidad, VIDEO_HD, AUDIO_VOZ, type Mensaje } from "@/lib/red";
 
 type Parte = {
@@ -98,7 +98,6 @@ export default function Consola() {
   const [monitorOn, setMonitorOn] = useState(true);
   const [fondo, setFondo] = useState<TipoFondo>("ninguno");
   const [config, setConfig] = useState(false);
-  const [versionFondos, setVersionFondos] = useState(0);
   const [cargandoFondo, setCargandoFondo] = useState(false);
   const procFondo = useRef<ProcesadorFondo | null>(null);
   const fotoFondo = useRef<HTMLImageElement | null>(null);
@@ -951,8 +950,8 @@ export default function Consola() {
 
               <section>
                 <h3>Fondo detrás del conductor {cargandoFondo && <small>· preparando el fondo…</small>}</h3>
-                <p className="panel-nota">Fondos de canal de noticias generados con IA gratuita. La primera vez cada uno tarda unos segundos en aparecer. {!abierto && "Abrí el estudio para aplicarlos."}</p>
-                <div className="fondos-grilla" key={versionFondos}>
+                <p className="panel-nota">Fondos de canal de noticias. También podés subir una foto propia, por ejemplo de un estudio o de la redacción. {!abierto && "Abrí el estudio para aplicarlos."}</p>
+                <div className="fondos-grilla">
                   <button className={"fondo-tile " + (fondo === "ninguno" ? "on" : "")} onClick={() => aplicarFondo("ninguno")} disabled={!abierto || cargandoFondo}><span className="fondo-vacio">Cámara real</span><b>Sin fondo</b></button>
                   {NOTICIEROS.map((n) => (
                     <button key={n.id} className={"fondo-tile " + (fondo === n.id ? "on" : "")} onClick={() => aplicarFondo(n.id)} disabled={!abierto || cargandoFondo}>
@@ -967,9 +966,6 @@ export default function Consola() {
                     <input type="file" accept="image/*" hidden onChange={(e) => subirFoto(e.target.files?.[0])} disabled={!abierto} />
                   </label>
                 </div>
-                {NOTICIEROS.some((n) => n.id === fondo) && (
-                  <button className="mini-btn" onClick={() => { otraVersion(fondo); setVersionFondos((v) => v + 1); aplicarFondo(fondo); }} disabled={cargandoFondo}><RefreshCw size={12} /> Otra versión de este fondo</button>
-                )}
               </section>
 
               <section>
