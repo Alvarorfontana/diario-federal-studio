@@ -118,6 +118,12 @@ export default function Consola() {
   const [obsEstado, setObsEstado] = useState<"desconectado" | "conectado" | "emitiendo" | "error">("desconectado");
   const [obsTiempo, setObsTiempo] = useState("");
   const [aperturaAlEmitir, setAperturaAlEmitir] = useState(true);
+  // ——— puente propio en la nube (emite sin instalar nada)
+  const [puenteUrl, setPuenteUrl] = useState(process.env.NEXT_PUBLIC_PUENTE_URL || "");
+  const [puenteClave, setPuenteClave] = useState("");
+  const [puenteEstado, setPuenteEstado] = useState<"apagado" | "despertando" | "conectando" | "emitiendo" | "error">("apagado");
+  const [puenteMsg, setPuenteMsg] = useState("");
+  const [puenteDesde, setPuenteDesde] = useState(0);
 
   // ——— referencias de trabajo (no causan render)
   const lienzo = useRef<HTMLCanvasElement>(null);
@@ -146,6 +152,8 @@ export default function Consola() {
     setTitular(leer("titular", "LA ACTUALIDAD, EN PRIMERA PERSONA"));
     setTema(leer("tema", ""));
     setCamara(leer("camara", ""));
+    setPuenteUrl(leer("puente-url", process.env.NEXT_PUBLIC_PUENTE_URL || ""));
+    setPuenteClave(leer("puente-clave", ""));
     setMicro(leer("micro", ""));
   }, []);
   useEffect(() => { if (sala) guardar("sala", sala); }, [sala]);
@@ -511,7 +519,78 @@ export default function Consola() {
     }, 1000);
     return () => window.clearInterval(id);
   }, [obsEstado]);
+  const puente = useRef<{ ws: WebSocket; rec: MediaRecorder | null } | null>(null);
+  async function emitirPuente() {
+    if (puente.current) {
+      if (!confirmarCorte()) return;
+      puente.current.rec?.stop();
+      puente.current.ws.close();
+      puente.current = null;
+      setPuenteEstado("apagado");
+      setVivo(false);
+      return;
+    }
+    const s = (window as unknown as { dfPrograma?: MediaStream }).dfPrograma;
+    if (!s) return;
+    const base = puenteUrl.trim().replace(/\/+$/, "");
+    guardar("puente-url", base);
+    guardar("puente-clave", puenteClave);
+    // el servidor gratuito se duerme si no se usa: primero se lo despierta
+    setPuenteEstado("despertando");
+    setPuenteMsg("Despertando el servidor (puede tardar hasta un minuto)…");
+    let listo = false;
+    for (let i = 0; i < 30 && !listo; i++) {
+      try {
+        const r = await fetch(base + "/", { cache: "no-store" });
+        const j = await r.json();
+        if (j.falta?.length) { setPuenteEstado("error"); setPuenteMsg("Al servidor le falta configurar: " + j.falta.join(" y ")); return; }
+        listo = true;
+      } catch { await new Promise((ok) => setTimeout(ok, 3000)); }
+    }
+    if (!listo) { setPuenteEstado("error"); setPuenteMsg("No se pudo llegar al servidor. Revisá la dirección."); return; }
+    setPuenteEstado("conectando");
+    setPuenteMsg("Conectando con YouTube…");
+    const tipos = ["video/webm;codecs=h264,opus", "video/x-matroska;codecs=avc1,opus", "video/webm;codecs=vp8,opus", "video/webm"];
+    const tipo = tipos.find((t) => MediaRecorder.isTypeSupported(t)) || "";
+    const codec = /h264|avc1/.test(tipo) ? "h264" : "otro";
+    const ws = new WebSocket(base.replace(/^http/, "ws") + "/emitir");
+    ws.binaryType = "arraybuffer";
+    puente.current = { ws, rec: null };
+    ws.onopen = () => ws.send(JSON.stringify({ clave: puenteClave, codec }));
+    ws.onmessage = (ev) => {
+      let m: { ok?: boolean; error?: string; aviso?: string; fin?: boolean } = {};
+      try { m = JSON.parse(ev.data); } catch { return; }
+      if (m.error) { setPuenteEstado("error"); setPuenteMsg(m.error); return; }
+      if (m.aviso) setPuenteMsg(m.aviso);
+      if (m.ok && puente.current?.ws === ws) {
+        const opciones = { mimeType: tipo || undefined, videoBitsPerSecond: 5_000_000, audioBitsPerSecond: 160_000, videoKeyFrameIntervalDuration: 2000 } as MediaRecorderOptions;
+        const rec = new MediaRecorder(s, opciones);
+        rec.ondataavailable = (e) => {
+          if (!e.data.size || ws.readyState !== 1) return;
+          if (ws.bufferedAmount > 25_000_000) { setPuenteMsg("Tu conexión no da abasto: la emisión puede cortarse."); return; }
+          ws.send(e.data);
+        };
+        rec.start(500);
+        puente.current.rec = rec;
+        setPuenteEstado("emitiendo");
+        setPuenteDesde(Date.now());
+        setPuenteMsg("En vivo en YouTube (la imagen tarda unos 15 segundos en aparecer allá)");
+        setVivo(true);
+        if (aperturaAlEmitir) window.setTimeout(() => pasarCortina("apertura"), 1500);
+      }
+    };
+    ws.onclose = () => {
+      if (puente.current?.ws !== ws) return;
+      puente.current.rec?.stop();
+      puente.current = null;
+      setPuenteEstado((e) => (e === "error" ? e : "error"));
+      setPuenteMsg((m) => (m.startsWith("Contraseña") || m.startsWith("Al servidor") ? m : "Se cortó la conexión con el servidor. Tocá Emitir para volver a salir."));
+      setVivo(false);
+    };
+  }
+
   async function emitir() {
+    if (puenteUrl.trim()) return emitirPuente();
     const o = obs.current;
     if (!o) { setPanel("salidas"); avisar("Primero conectá OBS en Salidas"); return; }
     if (obsEstado === "emitiendo") {
@@ -573,6 +652,7 @@ export default function Consola() {
           <i /> {reloj(ahora - inicioSesion)}
           {grabando && <><i /><span className="rec-chip"><span className="red-dot" />REC {reloj(ahora - grabando)}</span></>}
           {obsEstado === "emitiendo" && <><i /><span className="rec-chip aire"><span className="red-dot" />YOUTUBE {obsTiempo}</span></>}
+          {puenteEstado === "emitiendo" && <><i /><span className="rec-chip aire"><span className="red-dot" />YOUTUBE {reloj(ahora - puenteDesde)}</span></>}
         </div>
         <div className="top-actions"><button className="icon-btn" onClick={() => setPanel("ajustes")} aria-label="Ajustes"><Settings size={17} /></button><div className="avatar">{iniciales(nombreAnf)}</div></div>
       </header>
@@ -615,7 +695,7 @@ export default function Consola() {
             </div>
             <div className="monitor-foot">
               <span><i className="green-dot" /> {cortina.current ? (cortina.current.tipo === "apertura" ? "PASANDO APERTURA" : "CIERRE") : "SEÑAL DE PROGRAMA"}</span>
-              <span>{obsEstado === "emitiendo" ? "Transmitiendo a YouTube por OBS" : "Sin transmisión activa"}</span>
+              <span>{puenteEstado === "emitiendo" ? "Transmitiendo a YouTube" : obsEstado === "emitiendo" ? "Transmitiendo a YouTube por OBS" : "Sin transmisión activa"}</span>
               <button className="plain-icon" onClick={abrirSalida} title="Abrir salida limpia"><ExternalLink size={15} /></button>
             </div>
           </div>
@@ -647,7 +727,7 @@ export default function Consola() {
             <div className="record-group">
               <button className={"record-btn " + (grabando ? "rec" : "")} onClick={grabar} disabled={!abierto}>{grabando ? <Square size={12} /> : <Circle size={13} />} {grabando ? "Detener" : "Grabar"}</button>
               <button className="control-btn" onClick={abrirSalida} disabled={!abierto}><Tv size={15} /><span>Salida limpia</span></button>
-              <button className={"broadcast-btn " + (obsEstado === "emitiendo" ? "emitiendo" : obsEstado === "conectado" ? "listo" : "")} onClick={emitir} disabled={!abierto}><Radio size={15} /> {obsEstado === "emitiendo" ? "Cortar emisión" : "Emitir en YouTube"}</button>
+              <button className={"broadcast-btn " + (obsEstado === "emitiendo" || puenteEstado === "emitiendo" ? "emitiendo" : obsEstado === "conectado" || puenteUrl ? "listo" : "")} onClick={emitir} disabled={!abierto || puenteEstado === "despertando" || puenteEstado === "conectando"}><Radio size={15} /> {obsEstado === "emitiendo" || puenteEstado === "emitiendo" ? "Cortar emisión" : puenteEstado === "despertando" || puenteEstado === "conectando" ? "Conectando…" : "Emitir en YouTube"}</button>
             </div>
           </div>
         </section>
@@ -734,7 +814,16 @@ export default function Consola() {
 
           {panel === "salidas" && (
             <>
-              <div className="panel-title compact"><div><span className="eyebrow">YOUTUBE</span><h2>Emitir en vivo</h2></div><span className={"output-state " + (obsEstado === "emitiendo" ? "" : "off")}>{obsEstado.toUpperCase()}</span></div>
+              <div className="panel-title compact"><div><span className="eyebrow">YOUTUBE · DESDE CUALQUIER COMPU</span><h2>Servidor del estudio</h2></div><span className={"output-state " + (puenteEstado === "emitiendo" ? "" : "off")}>{puenteEstado.toUpperCase()}</span></div>
+              <p className="panel-nota">Con el servidor del estudio no hace falta instalar nada: la consola le manda el programa y el servidor lo pasa a YouTube. La clave de YouTube queda guardada en el servidor.</p>
+              <label className="field-label">Dirección del servidor</label><input value={puenteUrl} onChange={(e) => setPuenteUrl(e.target.value)} placeholder="https://usuario-df-studio-puente.hf.space" />
+              <label className="field-label">Contraseña del estudio</label><input type="password" value={puenteClave} onChange={(e) => setPuenteClave(e.target.value)} />
+              {puenteMsg && <p className={puenteEstado === "error" ? "settings-note" : "panel-nota"}>{puenteMsg}</p>}
+              <button className={"broadcast-btn ancho " + (puenteEstado === "emitiendo" ? "emitiendo" : "listo")} onClick={emitirPuente} disabled={!abierto || !puenteUrl || puenteEstado === "despertando" || puenteEstado === "conectando"}><Radio size={15} /> {puenteEstado === "emitiendo" ? "Cortar emisión" : "Emitir en YouTube"}</button>
+              <label className="mini-check"><input type="checkbox" checked={aperturaAlEmitir} onChange={(e) => setAperturaAlEmitir(e.target.checked)} /> Pasar la apertura al empezar</label>
+              <div className="panel-divider" />
+              <div className="panel-title compact"><div><span className="eyebrow">ALTERNATIVA</span><h2>Emitir con OBS</h2></div><span className={"output-state " + (obsEstado === "emitiendo" ? "" : "off")}>{obsEstado.toUpperCase()}</span></div>
+              <p className="panel-nota">Solo si no usás el servidor (dejá vacía la dirección de arriba).</p>
               <ol className="guia">
                 <li>Instalá <b>OBS Studio</b> (gratis, obsproject.com) en esta computadora.</li>
                 <li>En <b>YouTube Studio → Emitir en vivo</b> copiá la <b>clave de transmisión</b>. En OBS: Ajustes → Emisión → Servicio YouTube → pegá la clave. Se hace una sola vez.</li>

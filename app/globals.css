@@ -289,3 +289,5 @@ footer{background:#0e1115;border-color:#252b33;padding-inline:30px}
 .inv-fin p{color:#b4bac2}
 @media(max-width:1100px){.scene-grid.seis{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:800px){.inv-cuerpo{grid-template-columns:1fr;padding:10px}.arranque-campos{grid-template-columns:1fr}.inv-propio{width:34%}.inv-top{padding:0 12px}.inv-estado{font-size:9px;padding:6px 8px}.right-panel{max-height:none}}
+
+.broadcast-btn.ancho{width:100%;justify-content:center;margin-top:10px;padding:12px}
