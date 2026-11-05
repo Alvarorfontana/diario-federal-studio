@@ -291,3 +291,9 @@ footer{background:#0e1115;border-color:#252b33;padding-inline:30px}
 @media(max-width:800px){.inv-cuerpo{grid-template-columns:1fr;padding:10px}.arranque-campos{grid-template-columns:1fr}.inv-propio{width:34%}.inv-top{padding:0 12px}.inv-estado{font-size:9px;padding:6px 8px}.right-panel{max-height:none}}
 
 .broadcast-btn.ancho{width:100%;justify-content:center;margin-top:10px;padding:12px}
+.fondo-sel{position:relative;padding-right:8px}
+.fondo-sel select{background:transparent;border:0;color:inherit;font-size:10px;outline:none;cursor:pointer;max-width:150px}
+.fondo-sel select option{background:#1d2025;color:#e5e7eb}
+.fondos-inv{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.fondos-inv button{background:#1f2328;border:1px solid #363b43;color:#d6dae0;padding:7px 9px;border-radius:12px;font-size:10px;cursor:pointer}
+.fondos-inv button.on{border-color:var(--red);color:#fff;background:#3a1418}

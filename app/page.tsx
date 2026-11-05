@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { ANCHO, ALTO, dibujar, type Escena, type Persona, type Programa, type Cortina } from "@/lib/compositor";
 import { Mezcla } from "@/lib/mezcla";
+import { FONDOS, ProcesadorFondo, leerFoto, type TipoFondo } from "@/lib/fondos";
 import { crearPeer, idEstudio, nuevaSala, hora, iniciales, subirCalidad, VIDEO_HD, AUDIO_VOZ, type Mensaje } from "@/lib/red";
 
 type Parte = {
@@ -95,6 +96,10 @@ export default function Consola() {
   const [camara, setCamara] = useState("");
   const [micro, setMicro] = useState("");
   const [monitorOn, setMonitorOn] = useState(true);
+  const [fondo, setFondo] = useState<TipoFondo>("ninguno");
+  const [cargandoFondo, setCargandoFondo] = useState(false);
+  const procFondo = useRef<ProcesadorFondo | null>(null);
+  const fotoFondo = useRef<HTMLImageElement | null>(null);
 
   // ——— gráfica
   const [escena, setEscena] = useState<Escena>("dividida");
@@ -268,13 +273,47 @@ export default function Consola() {
       }
     }
     anf.stream = s;
-    anf.video = crearVideo(s);
     anf.conVideo = s.getVideoTracks().length > 0;
+    await aplicarFondo((leer("fondo", "ninguno") as TipoFondo) || "ninguno");
     s.getAudioTracks().forEach((t) => (t.enabled = !anf.silenciado));
     mezcla.current?.agregar("anfitrion", s, { aMonitor: false });
     mezcla.current?.volumen("anfitrion", anf.volumen);
     mezcla.current?.silenciar("anfitrion", anf.silenciado);
     refrescar();
+  }
+
+  // ——— fondo virtual del anfitrión
+  async function aplicarFondo(tipo: TipoFondo) {
+    const anf = partes.current.get("anfitrion");
+    if (!anf?.stream) return;
+    setFondo(tipo);
+    guardar("fondo", tipo);
+    procFondo.current?.detener();
+    procFondo.current = null;
+    let fuente = anf.stream;
+    if (tipo !== "ninguno" && !(tipo === "foto" && !fotoFondo.current)) {
+      setCargandoFondo(true);
+      try {
+        procFondo.current = await ProcesadorFondo.crear(anf.stream, tipo, fotoFondo.current);
+        fuente = procFondo.current.salida;
+      } catch {
+        avisar("No se pudo activar el fondo virtual en esta computadora.");
+        setFondo("ninguno");
+      }
+      setCargandoFondo(false);
+    }
+    anf.video?.remove();
+    anf.video = crearVideo(fuente);
+    refrescar();
+  }
+  async function subirFoto(f: File | undefined) {
+    if (!f) return;
+    try {
+      fotoFondo.current = await leerFoto(f);
+      await aplicarFondo("foto");
+    } catch {
+      avisar("No se pudo leer esa imagen.");
+    }
   }
 
   async function listarDispositivos() {
@@ -722,6 +761,12 @@ export default function Consola() {
               <button className={"control-btn " + (anf?.silenciado ? "muted" : "")} onClick={() => silenciar("anfitrion")} disabled={!abierto}>{anf?.silenciado ? <MicOff /> : <Mic />}<span>{anf?.silenciado ? "Micrófono off" : "Micrófono"}</span></button>
               <button className={"control-btn " + (anf?.conVideo ? "on" : "")} onClick={camaraAnf} disabled={!abierto}>{anf?.conVideo ? <Video /> : <VideoOff />}<span>{anf?.conVideo ? "Cámara" : "Cámara off"}</span></button>
               <button className={"control-btn " + (compartiendo ? "on" : "")} onClick={compartir} disabled={!abierto}>{compartiendo ? <MonitorOff /> : <MonitorUp />}<span>{compartiendo ? "Dejar de compartir" : "Compartir pantalla"}</span></button>
+              <label className={"control-btn fondo-sel " + (fondo !== "ninguno" ? "on" : "")} title="Fondo virtual">
+                <Sparkles size={15} />
+                <select value={fondo} onChange={(e) => aplicarFondo(e.target.value as TipoFondo)} disabled={!abierto || cargandoFondo}>
+                  {FONDOS.filter((f) => f.id !== "foto" || fotoFondo.current).map((f) => <option key={f.id} value={f.id}>{cargandoFondo && f.id === fondo ? "Cargando…" : f.nombre}</option>)}
+                </select>
+              </label>
               <button className={"control-btn " + (monitorOn ? "" : "muted")} onClick={() => { const on = !monitorOn; setMonitorOn(on); if (mezcla.current) mezcla.current.monitor.gain.value = on ? 1 : 0; }} disabled={!abierto}><Headphones /><span>{monitorOn ? "Escucha" : "Escucha off"}</span></button>
             </div>
             <div className="record-group">
@@ -845,6 +890,14 @@ export default function Consola() {
 
           {panel === "ajustes" && (
             <>
+              <div className="panel-title compact"><div><span className="eyebrow">IMAGEN</span><h2>Fondo virtual</h2></div></div>
+              <p className="panel-nota">Recorta a la persona y pone detrás un fondo de estudio con la gráfica DF. Funciona dentro del navegador, sin instalar nada.</p>
+              <select value={fondo} onChange={(e) => aplicarFondo(e.target.value as TipoFondo)} disabled={!abierto || cargandoFondo}>
+                {FONDOS.filter((f) => f.id !== "foto" || fotoFondo.current).map((f) => <option key={f.id} value={f.id}>{f.nombre}</option>)}
+              </select>
+              <label className="field-label">Usar una foto propia de fondo (por ejemplo, una redacción real)</label>
+              <input type="file" accept="image/*" onChange={(e) => subirFoto(e.target.files?.[0])} disabled={!abierto} />
+              <div className="panel-divider" />
               <div className="panel-title compact"><div><span className="eyebrow">EQUIPOS</span><h2>Cámara y micrófono</h2></div></div>
               <label className="field-label">Cámara</label>
               <select value={camara} onChange={(e) => { setCamara(e.target.value); guardar("camara", e.target.value); camaraYMicro(e.target.value, micro); }} disabled={!abierto}>

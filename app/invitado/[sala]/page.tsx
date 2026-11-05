@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import type { DataConnection, MediaConnection, default as PeerT } from "peerjs";
 import { Mic, MicOff, Video, VideoOff, Send, LogOut, Headphones } from "lucide-react";
+import { FONDOS, ProcesadorFondo, type TipoFondo } from "@/lib/fondos";
 import { crearPeer, idEstudio, idInvitado, hora, subirCalidad, VIDEO_HD, AUDIO_VOZ, type Mensaje } from "@/lib/red";
 
 type Estado = "preparando" | "conectando" | "espera" | "conectado" | "terminado";
@@ -36,6 +37,10 @@ export default function Invitado() {
   const propio = useRef<HTMLVideoElement>(null);
   const retorno = useRef<HTMLVideoElement>(null);
   const local = useRef<MediaStream | null>(null);
+  const crudo = useRef<MediaStream | null>(null);
+  const procFondo = useRef<ProcesadorFondo | null>(null);
+  const [fondo, setFondo] = useState<TipoFondo>("ninguno");
+  const [cargandoFondo, setCargandoFondo] = useState(false);
   const peer = useRef<PeerT | null>(null);
   const llamada = useRef<MediaConnection | null>(null);
   const datos = useRef<DataConnection | null>(null);
@@ -44,22 +49,38 @@ export default function Invitado() {
   useEffect(() => {
     setNombre(leer("nombre", ""));
     setRol(leer("rol", ""));
-    prender("", "");
-    return () => local.current?.getTracks().forEach((t) => t.stop());
+    const f = (leer("fondo", "ninguno") as TipoFondo) || "ninguno";
+    setFondo(f);
+    prender("", "", f);
+    return () => { crudo.current?.getTracks().forEach((t) => t.stop()); procFondo.current?.detener(); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function prender(c: string, m: string) {
-    local.current?.getTracks().forEach((t) => t.stop());
+  async function prender(c: string, m: string, tipoFondo: TipoFondo = fondo) {
+    crudo.current?.getTracks().forEach((t) => t.stop());
+    procFondo.current?.detener();
+    procFondo.current = null;
     try {
-      const s = await navigator.mediaDevices.getUserMedia({
+      const cam0 = await navigator.mediaDevices.getUserMedia({
         video: { ...VIDEO_HD, ...(c ? { deviceId: { exact: c } } : { facingMode: "user" }) },
         audio: { ...AUDIO_VOZ, ...(m ? { deviceId: { exact: m } } : {}) },
       });
+      crudo.current = cam0;
+      let s = cam0;
+      if (tipoFondo !== "ninguno" && tipoFondo !== "foto") {
+        setCargandoFondo(true);
+        try {
+          procFondo.current = await ProcesadorFondo.crear(cam0, tipoFondo);
+          s = procFondo.current.salida;
+        } catch {
+          setNota("Tu equipo no pudo activar el fondo virtual; seguís con la cámara normal.");
+        }
+        setCargandoFondo(false);
+      }
       local.current = s;
       if (propio.current) propio.current.srcObject = s;
       s.getAudioTracks().forEach((t) => (t.enabled = mic));
       s.getVideoTracks().forEach((t) => (t.enabled = cam));
-      medidor(s);
+      medidor(cam0);
       const d = await navigator.mediaDevices.enumerateDevices();
       setCamaras(d.filter((x) => x.kind === "videoinput"));
       setMicros(d.filter((x) => x.kind === "audioinput"));
@@ -167,11 +188,18 @@ export default function Invitado() {
   function alternarMic(on = !mic) {
     setMic(on);
     local.current?.getAudioTracks().forEach((t) => (t.enabled = on));
+    crudo.current?.getAudioTracks().forEach((t) => (t.enabled = on));
   }
   function alternarCam() {
     const on = !cam;
     setCam(on);
     local.current?.getVideoTracks().forEach((t) => (t.enabled = on));
+    crudo.current?.getVideoTracks().forEach((t) => (t.enabled = on));
+  }
+  function cambiarFondo(f: TipoFondo) {
+    setFondo(f);
+    guardar("fondo", f);
+    prender(camara, micro, f);
   }
   function mandar(e: React.FormEvent) {
     e.preventDefault();
@@ -260,6 +288,12 @@ export default function Invitado() {
               <option value="">Predeterminado</option>
               {micros.map((d, i) => <option key={d.deviceId} value={d.deviceId}>{d.label || `Micrófono ${i + 1}`}</option>)}
             </select>
+            <label className="field-label">Fondo {cargandoFondo && "· cargando…"}</label>
+            <div className="fondos-inv">
+              {FONDOS.filter((f) => f.id !== "foto").map((f) => (
+                <button key={f.id} className={fondo === f.id ? "on" : ""} onClick={() => cambiarFondo(f.id)} disabled={cargandoFondo}>{f.nombre}</button>
+              ))}
+            </div>
             <p className="panel-nota"><Headphones size={12} /> Con auriculares se evita el eco.</p>
             {dentro && (
               <>
