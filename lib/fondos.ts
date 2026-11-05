@@ -144,9 +144,14 @@ export class ProcesadorFondo {
     p.save();
     p.clearRect(0, 0, w, h);
     p.globalCompositeOperation = "copy";
-    p.filter = "blur(3px)";
+    p.filter = "blur(2px)";
     p.drawImage(r.segmentationMask, 0, 0, w, h);
     p.filter = "none";
+    // se ajusta el borde hacia adentro (la máscara se multiplica por sí misma): así no queda
+    // el halo claro que deja la pared de atrás alrededor de la cabeza y los hombros
+    p.globalCompositeOperation = "destination-in";
+    p.drawImage(this.persona, 0, 0);
+    p.drawImage(this.persona, 0, 0);
     p.globalCompositeOperation = "source-in";
     p.drawImage(r.image, 0, 0, w, h);
     p.restore();
