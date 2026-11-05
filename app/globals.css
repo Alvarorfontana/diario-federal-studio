@@ -330,3 +330,5 @@ footer{background:#0e1115;border-color:#252b33;padding-inline:30px}
 .program-canvas-wrap:has(.arranque) .program-canvas{display:none}
 .arranque{position:relative;inset:auto}
 }
+.dos-botones{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.dos-botones .invite-btn{margin-top:8px}

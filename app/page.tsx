@@ -15,6 +15,20 @@ import { crearPeer, idEstudio, nuevaSala, hora, iniciales, subirCalidad, VIDEO_H
 // Puente a YouTube del Diario Federal: corre en GitHub Codespaces y publica su dirección
 // (un túnel de Cloudflare que cambia cada vez que se enciende) en la rama "puente" del repo.
 const PUENTE_DF = "";
+async function buscarPuenteCompleto(): Promise<{ url: string; desde: string } | null> {
+  try {
+    const r = await fetch(`https://raw.githubusercontent.com/Alvarorfontana/diario-federal-studio/puente/puente.json?t=${Date.now()}`, { cache: "no-store" });
+    if (r.ok) return await r.json();
+  } catch {}
+  return null;
+}
+async function servidorResponde(url: string) {
+  try {
+    const r = await fetch(url.replace(/\/+$/, "") + "/", { cache: "no-store" });
+    return r.ok;
+  } catch { return false; }
+}
+
 async function buscarPuente(): Promise<string> {
   // 1) archivo crudo (sin límite de consultas; el ?t= evita copias viejas guardadas en el camino)
   // 2) API de GitHub, por si lo anterior falla
@@ -154,6 +168,8 @@ export default function Consola() {
   const [puenteEstado, setPuenteEstado] = useState<"apagado" | "despertando" | "conectando" | "emitiendo" | "error">("apagado");
   const [puenteMsg, setPuenteMsg] = useState("");
   const [puenteDesde, setPuenteDesde] = useState(0);
+  const [encendiendo, setEncendiendo] = useState(false);
+  const [estadoServidor, setEstadoServidor] = useState<"desconocido" | "encendido" | "apagado">("desconocido");
 
   // ——— referencias de trabajo (no causan render)
   const lienzo = useRef<HTMLCanvasElement>(null);
@@ -189,9 +205,11 @@ export default function Consola() {
       try {
         const r = await fetch(u.replace(/\/+$/, "") + "/", { cache: "no-store" });
         const j = await r.json();
+        setEstadoServidor("encendido");
         setPuenteMsg(j.falta?.length ? "Servidor encendido. Le falta configurar: " + j.falta.join(" y ") : "Servidor encendido y listo para emitir.");
       } catch {
-        setPuenteMsg("El servidor está apagado. Encendelo en github.com/codespaces (abrí curly eureka y esperá a que cargue).");
+        setEstadoServidor("apagado");
+        setPuenteMsg("El servidor está apagado. Tocá «Encender servidor» (tarda uno o dos minutos).");
       }
     });
     setPuenteClave(leer("puente-clave", ""));
@@ -625,7 +643,7 @@ export default function Consola() {
         listo = true;
       } catch { await new Promise((ok) => setTimeout(ok, 3000)); }
     }
-    if (!listo) { setPuenteEstado("error"); setPuenteMsg("El servidor está apagado. Encendelo en github.com/codespaces (abrí curly eureka y esperá a que cargue: el puente arranca solo). Después volvé a tocar Emitir."); return; }
+    if (!listo) { setPuenteEstado("error"); setEstadoServidor("apagado"); setPuenteMsg("El servidor está apagado. Tocá «Encender servidor» y esperá uno o dos minutos; después volvé a tocar Emitir."); return; }
     setPuenteEstado("conectando");
     setPuenteMsg("Conectando con YouTube…");
     const tipos = ["video/webm;codecs=h264,opus", "video/x-matroska;codecs=avc1,opus", "video/webm;codecs=vp8,opus", "video/webm"];
@@ -665,6 +683,44 @@ export default function Consola() {
       setPuenteMsg((m) => (m.startsWith("Contraseña") || m.startsWith("Al servidor") ? m : "Se cortó la conexión con el servidor. Tocá Emitir para volver a salir."));
       setVivo(false);
     };
+  }
+
+  async function servidor(accion: "encender" | "apagar") {
+    if (!puenteClave) { setPuenteMsg("Escribí primero la contraseña del estudio."); return; }
+    guardar("puente-clave", puenteClave);
+    setEncendiendo(true);
+    setPuenteMsg(accion === "encender" ? "Encendiendo el servidor… (uno o dos minutos)" : "Apagando el servidor…");
+    const t0 = new Date().toISOString();
+    try {
+      const r = await fetch("/api/servidor", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clave: puenteClave, accion }) });
+      const j = await r.json();
+      if (!r.ok) { setPuenteMsg(j.error || "No se pudo."); setEncendiendo(false); return; }
+      if (accion === "apagar") { setEstadoServidor("apagado"); setPuenteMsg("Servidor apagado. Así no gasta horas del plan gratis."); setEncendiendo(false); return; }
+      // esperar a que el puente publique una dirección nueva y responda
+      for (let i = 0; i < 60; i++) {
+        await new Promise((ok) => setTimeout(ok, 5000));
+        const p = await buscarPuenteCompleto();
+        if (p?.url && p.desde >= t0.slice(0, 19) && (await servidorResponde(p.url))) {
+          setPuenteUrl(p.url);
+          setEstadoServidor("encendido");
+          setPuenteMsg("Servidor encendido y listo. Ya podés emitir.");
+          setEncendiendo(false);
+          return;
+        }
+        // si ya estaba encendido de antes y responde, también sirve
+        if (i >= 2 && p?.url && (await servidorResponde(p.url))) {
+          setPuenteUrl(p.url);
+          setEstadoServidor("encendido");
+          setPuenteMsg("Servidor encendido y listo. Ya podés emitir.");
+          setEncendiendo(false);
+          return;
+        }
+      }
+      setPuenteMsg("El servidor tarda más de lo normal. Probá de nuevo en un minuto.");
+    } catch {
+      setPuenteMsg("No se pudo encender. Revisá la conexión.");
+    }
+    setEncendiendo(false);
   }
 
   async function emitir() {
@@ -903,7 +959,11 @@ export default function Consola() {
               <p className="panel-nota">Con el servidor del estudio no hace falta instalar nada: la consola le manda el programa y el servidor lo pasa a YouTube. La clave de YouTube queda guardada en el servidor.</p>
               <label className="field-label">Dirección del servidor</label><input value={puenteUrl} onChange={(e) => setPuenteUrl(e.target.value)} placeholder="https://usuario-df-studio-puente.hf.space" />
               <label className="field-label">Contraseña del estudio</label><input type="password" value={puenteClave} onChange={(e) => setPuenteClave(e.target.value)} />
-              {puenteMsg && <p className={puenteEstado === "error" ? "settings-note" : "panel-nota"}>{puenteMsg}</p>}
+              {puenteMsg && <p className={puenteEstado === "error" || estadoServidor === "apagado" ? "settings-note" : "panel-nota"}>{puenteMsg}</p>}
+              <div className="dos-botones">
+                <button className="invite-btn" onClick={() => servidor("encender")} disabled={encendiendo || estadoServidor === "encendido"}><Signal size={14} /> {encendiendo ? "Encendiendo…" : estadoServidor === "encendido" ? "Servidor encendido" : "Encender servidor"}</button>
+                <button className="invite-btn" onClick={() => servidor("apagar")} disabled={encendiendo || estadoServidor === "apagado" || puenteEstado === "emitiendo"}>Apagar servidor</button>
+              </div>
               <button className={"broadcast-btn ancho " + (puenteEstado === "emitiendo" ? "emitiendo" : "listo")} onClick={emitirPuente} disabled={!abierto || !puenteUrl || puenteEstado === "despertando" || puenteEstado === "conectando"}><Radio size={15} /> {puenteEstado === "emitiendo" ? "Cortar emisión" : "Emitir en YouTube"}</button>
               <label className="mini-check"><input type="checkbox" checked={aperturaAlEmitir} onChange={(e) => setAperturaAlEmitir(e.target.checked)} /> Pasar la apertura al empezar</label>
               <div className="panel-divider" />
