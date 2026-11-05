@@ -53,6 +53,16 @@ function crearVideo(stream: MediaStream) {
   v.playsInline = true;
   v.autoplay = true;
   v.srcObject = stream;
+  // se guarda dentro de la página (invisible) para que el navegador nunca deje de decodificar la imagen
+  let caja = document.getElementById("dfs-fuentes");
+  if (!caja) {
+    caja = document.createElement("div");
+    caja.id = "dfs-fuentes";
+    caja.style.cssText = "position:fixed;left:0;bottom:0;width:4px;height:4px;overflow:hidden;opacity:0.01;pointer-events:none;z-index:-1";
+    document.body.appendChild(caja);
+  }
+  v.style.cssText = "width:4px;height:4px";
+  caja.appendChild(v);
   v.play().catch(() => {});
   return v;
 }
@@ -122,6 +132,7 @@ export default function Consola() {
   const trozos = useRef<Blob[]>([]);
   const obs = useRef<import("obs-websocket-js").default | null>(null);
   const logo = useRef<HTMLImageElement | null>(null);
+  const intentos = useRef(0);
   const graf = useRef({ escena, foco, vivo, zocalos, titular, volanta, cinta, seccion, tema, placaTitulo, placaTexto });
   graf.current = { escena, foco, vivo, zocalos, titular, volanta, cinta, seccion, tema, placaTitulo, placaTexto };
 
@@ -184,7 +195,20 @@ export default function Consola() {
   useEffect(estadoATodos, [vivo, escena]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ——— encender el estudio
+  useEffect(() => {
+    let bc: BroadcastChannel | null = null;
+    try { bc = new BroadcastChannel("dfs-consola"); } catch { return; }
+    bc.onmessage = (ev) => {
+      if (ev.data === "quien" && peer.current) bc?.postMessage("aca");
+      if (ev.data === "aca") avisar("La consola ya está abierta en otra pestaña: cerrá una de las dos.");
+    };
+    canal.current = bc;
+    return () => bc?.close();
+  }, []);
+  const canal = useRef<BroadcastChannel | null>(null);
+
   async function abrir() {
+    canal.current?.postMessage("quien");
     try {
       mezcla.current = new Mezcla();
       await mezcla.current.ctx.resume();
@@ -258,11 +282,14 @@ export default function Consola() {
     setErrorRed("");
     const p = await crearPeer(idEstudio(salaId));
     peer.current = p;
-    p.on("open", () => setConexion("conectado"));
+    p.on("open", () => { intentos.current = 0; setErrorRed(""); setConexion("conectado"); });
     p.on("disconnected", () => { setConexion("conectando"); try { p.reconnect(); } catch {} });
     p.on("error", (e: { type?: string; message?: string }) => {
       if (e.type === "unavailable-id") {
-        setErrorRed("La sala sigue ocupada por una sesión anterior. Reintento en unos segundos…");
+        intentos.current += 1;
+        setErrorRed(intentos.current >= 3
+          ? "OCUPADA"
+          : "La sala sigue ocupada por una sesión anterior. Reintento en unos segundos…");
         setConexion("conectando");
         window.setTimeout(() => peer.current === p && conectar(salaId), 6000);
       } else if (e.type === "peer-unavailable") {
@@ -658,7 +685,12 @@ export default function Consola() {
               ))}
               <button className="invite-btn" onClick={copiarEnlace} disabled={!sala}><Copy size={15} /> Copiar enlace de invitación</button>
               {enlace && <p className="enlace">{enlace}</p>}
-              {errorRed && <p className="settings-note">{errorRed}</p>}
+              {errorRed && (errorRed === "OCUPADA" ? (
+                <div className="settings-note">
+                  Esta sala está abierta en otra pestaña o ventana (puede ser en otra computadora). Cerrala y esperá un minuto, o seguí con una sala nueva (cambia el enlace del invitado).
+                  <button className="invite-btn" onClick={cambiarSala}><RefreshCw size={14} /> Usar una sala nueva</button>
+                </div>
+              ) : <p className="settings-note">{errorRed}</p>)}
               <div className="panel-divider" />
               <div className="panel-title compact"><div><span className="eyebrow">MENSAJE AL INVITADO</span><h2>Avisos rápidos</h2></div></div>
               <div className="avisos">{AVISOS.map((a) => <button key={a} onClick={() => avisoRapido(a)} disabled={!invitados.length}>{a}</button>)}</div>
