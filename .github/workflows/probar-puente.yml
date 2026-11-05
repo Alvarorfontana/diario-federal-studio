@@ -1,0 +1,10 @@
+name: Probar puente
+on: workflow_dispatch
+jobs:
+  probar:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          URL=$(curl -s "https://raw.githubusercontent.com/Alvarorfontana/diario-federal-studio/puente/puente.json?t=$(date +%s)" | python3 -c 'import sys,json;print(json.load(sys.stdin)["url"])')
+          echo "Dirección: $URL"
+          curl -s -m 20 -w "\nHTTP %{http_code}\n" "$URL/" || echo "NO RESPONDE"
