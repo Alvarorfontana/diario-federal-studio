@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { ANCHO, ALTO, dibujar, type Escena, type Persona, type Programa, type Cortina } from "@/lib/compositor";
 import { Mezcla } from "@/lib/mezcla";
-import { FONDOS, NOTICIEROS, ProcesadorFondo, leerFoto, urlFondo, fijarBorde, bordeActual, type TipoFondo } from "@/lib/fondos";
+import { FONDOS, NOTICIEROS, ProcesadorFondo, leerFoto, urlFondo, fijarBorde, bordeActual, fijarRecorte, recorteActual, type TipoFondo } from "@/lib/fondos";
 import { crearPeer, idEstudio, nuevaSala, hora, iniciales, subirCalidad, VIDEO_HD, AUDIO_VOZ, type Mensaje } from "@/lib/red";
 
 type Parte = {
@@ -99,7 +99,8 @@ export default function Consola() {
   const [fondo, setFondo] = useState<TipoFondo>("ninguno");
   const [config, setConfig] = useState(false);
   const [borde, setBorde] = useState(2);
-  useEffect(() => setBorde(bordeActual()), []);
+  const [recorte, setRecorte] = useState<"ia" | "verde">("ia");
+  useEffect(() => { setBorde(bordeActual()); setRecorte(recorteActual()); }, []);
   const [cargandoFondo, setCargandoFondo] = useState(false);
   const procFondo = useRef<ProcesadorFondo | null>(null);
   const fotoFondo = useRef<HTMLImageElement | null>(null);
@@ -899,6 +900,11 @@ export default function Consola() {
               <select value={fondo} onChange={(e) => aplicarFondo(e.target.value as TipoFondo)} disabled={!abierto || cargandoFondo}>
                 {FONDOS.filter((f) => f.id !== "foto" || fotoFondo.current).map((f) => <option key={f.id} value={f.id}>{f.nombre}</option>)}
               </select>
+              <label className="field-label">Cómo se recorta a la persona</label>
+              <div className="avisos">
+                <button className={recorte === "ia" ? "elegido" : ""} onClick={() => { setRecorte("ia"); fijarRecorte("ia"); }}>Inteligencia artificial (sin nada atrás)</button>
+                <button className={recorte === "verde" ? "elegido" : ""} onClick={() => { setRecorte("verde"); fijarRecorte("verde"); }}>Pantalla verde (con tela verde detrás)</button>
+              </div>
               <label className="field-label">Ajuste del borde del recorte: {["mínimo", "suave", "normal", "firme", "fuerte", "máximo"][borde] || borde}</label>
               <input className="vol ancho" type="range" min={0} max={5} step={1} value={borde} onChange={(e) => { const n = Number(e.target.value); setBorde(n); fijarBorde(n); }} />
               <p className="panel-nota">Más a la derecha: menos halo claro alrededor tuyo.</p>
@@ -972,6 +978,11 @@ export default function Consola() {
                   </label>
                 </div>
 
+                <label className="field-label">Cómo se recorta a la persona</label>
+                <div className="avisos">
+                  <button className={recorte === "ia" ? "elegido" : ""} onClick={() => { setRecorte("ia"); fijarRecorte("ia"); }}>Inteligencia artificial (sin nada atrás)</button>
+                  <button className={recorte === "verde" ? "elegido" : ""} onClick={() => { setRecorte("verde"); fijarRecorte("verde"); }}>Pantalla verde (con tela verde detrás)</button>
+                </div>
                 <label className="field-label">Ajuste del borde del recorte: {["mínimo", "suave", "normal", "firme", "fuerte", "máximo"][borde] || borde}</label>
                 <input className="vol ancho" type="range" min={0} max={5} step={1} value={borde} onChange={(e) => { const n = Number(e.target.value); setBorde(n); fijarBorde(n); }} />
                 <p className="panel-nota">Si ves un halo claro alrededor tuyo, subilo. Si te recorta el pelo o las orejas, bajalo.</p>
