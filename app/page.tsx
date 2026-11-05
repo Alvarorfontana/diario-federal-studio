@@ -899,6 +899,9 @@ export default function Consola() {
               <select value={fondo} onChange={(e) => aplicarFondo(e.target.value as TipoFondo)} disabled={!abierto || cargandoFondo}>
                 {FONDOS.filter((f) => f.id !== "foto" || fotoFondo.current).map((f) => <option key={f.id} value={f.id}>{f.nombre}</option>)}
               </select>
+              <label className="field-label">Ajuste del borde del recorte: {["mínimo", "suave", "normal", "firme", "fuerte", "máximo"][borde] || borde}</label>
+              <input className="vol ancho" type="range" min={0} max={5} step={1} value={borde} onChange={(e) => { const n = Number(e.target.value); setBorde(n); fijarBorde(n); }} />
+              <p className="panel-nota">Más a la derecha: menos halo claro alrededor tuyo.</p>
               <label className="field-label">Usar una foto propia de fondo (por ejemplo, una redacción real)</label>
               <input type="file" accept="image/*" onChange={(e) => subirFoto(e.target.files?.[0])} disabled={!abierto} />
               <div className="panel-divider" />
