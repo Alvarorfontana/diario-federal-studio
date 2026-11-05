@@ -529,7 +529,8 @@ export default function Consola() {
 
   // ——— salida limpia para OBS
   function abrirSalida() {
-    const w = window.open("/salida", "df-salida", "popup,width=1280,height=720");
+    // se abre como pestaña: así se puede compartir con su sonido (OBS, StreamYard, etc.)
+    const w = window.open("/salida", "df-salida");
     if (!w) avisar("El navegador bloqueó la ventana. Permití ventanas emergentes para este sitio.");
   }
 
