@@ -10,14 +10,10 @@ const ESTILO = "photorealistic, professional broadcast television set, empty, no
 export const NOTICIEROS: FondoNoticias[] = [
   { id: "n-pantallas", nombre: "Estudio con pantalla gigante", prompt: `Modern TV news studio, huge curved LED video wall showing a city skyline at night, dark blue and red lighting, glossy floor, ${ESTILO}` },
   { id: "n-ciudad", nombre: "Ventanal sobre la ciudad", prompt: `Evening news studio with floor-to-ceiling windows overlooking Buenos Aires city lights at night, blurred bokeh, red accent lights, modern anchor set, ${ESTILO}` },
-  { id: "n-redaccion", nombre: "Redacción", prompt: `Busy modern newsroom background out of focus, rows of desks with computer monitors, wall of TV screens, red accents, bright, ${ESTILO}` },
-  { id: "n-mundo", nombre: "Mapa del mundo", prompt: `International news channel studio, large digital world map on LED screens, deep blue and red neon accents, ${ESTILO}` },
+  { id: "n-mundo", nombre: "Mapa del mundo · azul", prompt: `International news channel studio, large digital world map on LED screens, deep blue and red neon accents, ${ESTILO}` },
   { id: "n-mapa-rojo", nombre: "Mapa del mundo · rojo", prompt: `TV news studio, giant LED wall with glowing world map in red and dark grey, glossy black floor reflections, curved red light strip, ${ESTILO}` },
-  { id: "n-mapa-america", nombre: "Mapa de América", prompt: `News channel studio, large video wall showing a digital map of South America and the Americas, blue holographic lines, red accent lights, ${ESTILO}` },
   { id: "n-mapa-globo", nombre: "Globo terráqueo", prompt: `International news studio with a large glowing 3D earth globe on a huge screen, dark blue background, red and white accent lights, ${ESTILO}` },
   { id: "n-mapa-noche", nombre: "Mapa con luces de ciudades", prompt: `Night world map made of city lights on a panoramic LED wall in a modern news studio, deep navy blue, subtle red neon, ${ESTILO}` },
-  { id: "n-analisis", nombre: "Set de análisis político", prompt: `Political analysis TV studio, dark modern set with vertical LED panels, subtle light blue and white accents, elegant, ${ESTILO}` },
-  { id: "n-entrevista", nombre: "Set de entrevistas", prompt: `TV interview studio set background, warm lights, wooden bookshelves, red accent wall, plants, ${ESTILO}` },
 ];
 
 export const FONDOS: { id: TipoFondo; nombre: string }[] = [
