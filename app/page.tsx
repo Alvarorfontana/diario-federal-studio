@@ -16,12 +16,21 @@ import { crearPeer, idEstudio, nuevaSala, hora, iniciales, subirCalidad, VIDEO_H
 // (un túnel de Cloudflare que cambia cada vez que se enciende) en la rama "puente" del repo.
 const PUENTE_DF = "";
 async function buscarPuente(): Promise<string> {
-  try {
-    const r = await fetch("https://api.github.com/repos/Alvarorfontana/diario-federal-studio/contents/puente.json?ref=puente", { cache: "no-store", headers: { Accept: "application/vnd.github.raw+json" } });
-    if (!r.ok) return "";
-    const j = await r.json();
-    return typeof j.url === "string" ? j.url : "";
-  } catch { return ""; }
+  // 1) archivo crudo (sin límite de consultas; el ?t= evita copias viejas guardadas en el camino)
+  // 2) API de GitHub, por si lo anterior falla
+  const fuentes = [
+    `https://raw.githubusercontent.com/Alvarorfontana/diario-federal-studio/puente/puente.json?t=${Date.now()}`,
+    "https://api.github.com/repos/Alvarorfontana/diario-federal-studio/contents/puente.json?ref=puente",
+  ];
+  for (const u of fuentes) {
+    try {
+      const r = await fetch(u, { cache: "no-store", headers: u.includes("api.github") ? { Accept: "application/vnd.github.raw+json" } : {} });
+      if (!r.ok) continue;
+      const j = await r.json();
+      if (typeof j.url === "string" && j.url) return j.url;
+    } catch { /* probar la siguiente */ }
+  }
+  return "";
 }
 
 type Parte = {
@@ -173,8 +182,18 @@ export default function Consola() {
     setTitular(leer("titular", "LA ACTUALIDAD, EN PRIMERA PERSONA"));
     setTema(leer("tema", ""));
     setCamara(leer("camara", ""));
-    setPuenteUrl(leer("puente-url", process.env.NEXT_PUBLIC_PUENTE_URL || PUENTE_DF));
-    buscarPuente().then((u) => { if (u) setPuenteUrl(u); });
+    setPuenteUrl(process.env.NEXT_PUBLIC_PUENTE_URL || PUENTE_DF);
+    buscarPuente().then(async (u) => {
+      if (!u) return;
+      setPuenteUrl(u);
+      try {
+        const r = await fetch(u.replace(/\/+$/, "") + "/", { cache: "no-store" });
+        const j = await r.json();
+        setPuenteMsg(j.falta?.length ? "Servidor encendido. Le falta configurar: " + j.falta.join(" y ") : "Servidor encendido y listo para emitir.");
+      } catch {
+        setPuenteMsg("El servidor está apagado. Encendelo en github.com/codespaces (abrí curly eureka y esperá a que cargue).");
+      }
+    });
     setPuenteClave(leer("puente-clave", ""));
     setMicro(leer("micro", ""));
   }, []);
@@ -593,13 +612,12 @@ export default function Consola() {
     const publicada = await buscarPuente();
     if (publicada) setPuenteUrl(publicada);
     const base = (publicada || puenteUrl).trim().replace(/\/+$/, "");
-    guardar("puente-url", base);
     guardar("puente-clave", puenteClave);
     // el servidor gratuito se duerme si no se usa: primero se lo despierta
     setPuenteEstado("despertando");
-    setPuenteMsg("Despertando el servidor (puede tardar hasta un minuto)…");
+    setPuenteMsg("Buscando el servidor…");
     let listo = false;
-    for (let i = 0; i < 30 && !listo; i++) {
+    for (let i = 0; i < 6 && !listo; i++) {
       try {
         const r = await fetch(base + "/", { cache: "no-store" });
         const j = await r.json();
@@ -607,7 +625,7 @@ export default function Consola() {
         listo = true;
       } catch { await new Promise((ok) => setTimeout(ok, 3000)); }
     }
-    if (!listo) { setPuenteEstado("error"); setPuenteMsg("No se pudo llegar al servidor. Revisá la dirección."); return; }
+    if (!listo) { setPuenteEstado("error"); setPuenteMsg("El servidor está apagado. Encendelo en github.com/codespaces (abrí curly eureka y esperá a que cargue: el puente arranca solo). Después volvé a tocar Emitir."); return; }
     setPuenteEstado("conectando");
     setPuenteMsg("Conectando con YouTube…");
     const tipos = ["video/webm;codecs=h264,opus", "video/x-matroska;codecs=avc1,opus", "video/webm;codecs=vp8,opus", "video/webm"];
