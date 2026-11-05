@@ -12,6 +12,9 @@ import { Mezcla } from "@/lib/mezcla";
 import { FONDOS, NOTICIEROS, ProcesadorFondo, leerFoto, urlFondo, fijarBorde, bordeActual, fijarRecorte, recorteActual, type TipoFondo } from "@/lib/fondos";
 import { crearPeer, idEstudio, nuevaSala, hora, iniciales, subirCalidad, VIDEO_HD, AUDIO_VOZ, type Mensaje } from "@/lib/red";
 
+// Puente a YouTube del Diario Federal (GitHub Codespaces). Se puede cambiar desde Salidas.
+const PUENTE_DF = "https://curly-eureka-4gvvv7wpxrhjqq5-8000.app.github.dev";
+
 type Parte = {
   id: string;
   nombre: string;
@@ -128,7 +131,7 @@ export default function Consola() {
   const [obsTiempo, setObsTiempo] = useState("");
   const [aperturaAlEmitir, setAperturaAlEmitir] = useState(true);
   // ——— puente propio en la nube (emite sin instalar nada)
-  const [puenteUrl, setPuenteUrl] = useState(process.env.NEXT_PUBLIC_PUENTE_URL || "");
+  const [puenteUrl, setPuenteUrl] = useState(process.env.NEXT_PUBLIC_PUENTE_URL || PUENTE_DF);
   const [puenteClave, setPuenteClave] = useState("");
   const [puenteEstado, setPuenteEstado] = useState<"apagado" | "despertando" | "conectando" | "emitiendo" | "error">("apagado");
   const [puenteMsg, setPuenteMsg] = useState("");
@@ -161,7 +164,7 @@ export default function Consola() {
     setTitular(leer("titular", "LA ACTUALIDAD, EN PRIMERA PERSONA"));
     setTema(leer("tema", ""));
     setCamara(leer("camara", ""));
-    setPuenteUrl(leer("puente-url", process.env.NEXT_PUBLIC_PUENTE_URL || ""));
+    setPuenteUrl(leer("puente-url", process.env.NEXT_PUBLIC_PUENTE_URL || PUENTE_DF));
     setPuenteClave(leer("puente-clave", ""));
     setMicro(leer("micro", ""));
   }, []);
