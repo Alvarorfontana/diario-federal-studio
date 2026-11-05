@@ -27,14 +27,23 @@ for i in $(seq 1 40); do
 done
 if [ -z "$URL" ]; then echo "No se pudo abrir el túnel. Mirá /tmp/tunel.log"; exit 1; fi
 
-# publicar la dirección para la consola
+# publicar la dirección para la consola (API de GitHub con el permiso que trae el codespace)
 JSON=$(printf '{"url":"%s","desde":"%s"}' "$URL" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")
 B64=$(printf '%s' "$JSON" | base64 -w0)
-if ! gh api "repos/$REPO/branches/puente" >/dev/null 2>&1; then
-  BASE=$(gh api "repos/$REPO/git/ref/heads/main" --jq .object.sha)
-  gh api -X POST "repos/$REPO/git/refs" -f ref=refs/heads/puente -f sha="$BASE" >/dev/null
+API="https://api.github.com/repos/$REPO"
+AUT=(-H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json")
+ok=0
+if [ -n "$GITHUB_TOKEN" ]; then
+  if ! curl -sf "${AUT[@]}" "$API/branches/puente" >/dev/null; then
+    BASE=$(curl -sf "${AUT[@]}" "$API/git/ref/heads/main" | python3 -c 'import sys,json;print(json.load(sys.stdin)["object"]["sha"])')
+    curl -sf -X POST "${AUT[@]}" "$API/git/refs" -d "{\"ref\":\"refs/heads/puente\",\"sha\":\"$BASE\"}" >/dev/null
+  fi
+  SHA=$(curl -sf "${AUT[@]}" "$API/contents/puente.json?ref=puente" | python3 -c 'import sys,json;print(json.load(sys.stdin)["sha"])' 2>/dev/null)
+  CUERPO="{\"message\":\"Dirección del puente\",\"content\":\"$B64\",\"branch\":\"puente\"${SHA:+,\"sha\":\"$SHA\"}}"
+  curl -sf -X PUT "${AUT[@]}" "$API/contents/puente.json" -d "$CUERPO" >/dev/null && ok=1
 fi
-SHA=$(gh api "repos/$REPO/contents/puente.json?ref=puente" --jq .sha 2>/dev/null || true)
-gh api -X PUT "repos/$REPO/contents/puente.json" -f message="Dirección del puente" -f content="$B64" -f branch=puente ${SHA:+-f sha="$SHA"} >/dev/null \
-  && echo "Puente DF listo: $URL (la consola lo encuentra sola)" \
-  || echo "Puente DF listo: $URL  ← pegala en la consola, pestaña Salidas"
+if [ $ok = 1 ]; then
+  echo "Puente DF listo: $URL (la consola lo encuentra sola)"
+else
+  echo "Puente DF listo: $URL  ← pegala en la consola, pestaña Salidas"
+fi
