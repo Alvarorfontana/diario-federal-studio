@@ -16,16 +16,17 @@ if ! command -v cloudflared >/dev/null 2>&1 && [ ! -x /tmp/cloudflared ]; then
   chmod +x /tmp/cloudflared
 fi
 CF=$(command -v cloudflared || echo /tmp/cloudflared)
-: > /tmp/tunel.log
-setsid nohup "$CF" tunnel --no-autoupdate --url http://localhost:8000 > /tmp/tunel.log 2>&1 < /dev/null &
+sleep 1
+LOG="/tmp/tunel-$(date +%s).log"
+setsid nohup "$CF" tunnel --no-autoupdate --url http://localhost:8000 > "$LOG" 2>&1 < /dev/null &
 
 URL=""
 for i in $(seq 1 40); do
   sleep 2
-  URL=$(grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' /tmp/tunel.log | head -1)
+  URL=$(grep -ao 'https://[a-z0-9-]*\.trycloudflare\.com' "$LOG" | head -1)
   [ -n "$URL" ] && break
 done
-if [ -z "$URL" ]; then echo "No se pudo abrir el túnel. Mirá /tmp/tunel.log"; exit 1; fi
+if [ -z "$URL" ]; then echo "No se pudo abrir el túnel. Mirá $LOG"; exit 1; fi
 
 # publicar la dirección para la consola (API de GitHub con el permiso que trae el codespace)
 JSON=$(printf '{"url":"%s","desde":"%s"}' "$URL" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")
