@@ -320,3 +320,13 @@ footer{background:#0e1115;border-color:#252b33;padding-inline:30px}
 @media(max-width:700px){.dos-col,.fondos-grilla{grid-template-columns:1fr 1fr}}
 .vol.ancho{width:100%}
 .avisos button.elegido{border-color:var(--red);background:#3a1418;color:#fff}
+
+/* Celular: las pantallas de inicio no entran en un cuadro 16:9, así que el cuadro crece con su contenido */
+@media(max-width:800px),(max-height:560px){
+.inv-video:has(.inv-bienvenida){aspect-ratio:auto;overflow:visible}
+.inv-bienvenida{position:relative;inset:auto;padding:20px 16px}
+.inv-video:has(.inv-bienvenida) .inv-propio{position:relative;right:auto;bottom:auto;width:150px;margin:0 auto 14px}
+.program-canvas-wrap:has(.arranque){aspect-ratio:auto;height:auto}
+.program-canvas-wrap:has(.arranque) .program-canvas{display:none}
+.arranque{position:relative;inset:auto}
+}
